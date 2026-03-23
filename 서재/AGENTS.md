@@ -223,6 +223,141 @@ C:\dev\docs\서재\
 
 ---
 
-## 6. 변경 이력
+## 6. 서재 어구록 DB (GAS + Google Drive JSON)
+
+### 용도
+
+피드백 시 어구록을 참조하기 위한 검색용 DB다. 마크다운 파일과 별도로 운용된다.
+마크다운 파일은 원본 보관용이고, JSON DB는 AI가 피드백 쓸 때 빠르게 검색하기 위한 것이다.
+
+### GAS URL
+
+```
+https://script.google.com/macros/s/AKfycbyldcNzji4n3p7J83aDR86udPYXKaa8_BAu-E6uNFLTc7VIld_v3UKjGQPtRa0QpaQE/exec
+```
+
+### Google Drive 저장 위치
+
+- 폴더: `seojai-quotes`
+- 파일: `quotes-data.json`
+- 첫 호출 시 자동 생성됨
+
+### 액션 1: add_book (책 추가)
+
+사용자가 책 제목 + 저자 + 발췌문을 올리면, AI가 태그를 판단하고 아래 명령을 실행한다.
+같은 책 제목이 이미 있으면 덮어쓴다.
+
+```powershell
+Invoke-WebRequest -UseBasicParsing -Uri "https://script.google.com/macros/s/AKfycbyldcNzji4n3p7J83aDR86udPYXKaa8_BAu-E6uNFLTc7VIld_v3UKjGQPtRa0QpaQE/exec" -Method POST -ContentType "text/plain;charset=utf-8" -Body '{"action":"add_book","token":"claude-feedback","book":"책제목","author":"저자","tags":["태그1","태그2"],"quotes":["발췌문1","발췌문2"]}'
+```
+
+### 액션 2: load_quotes (어구록 검색)
+
+피드백을 쓸 때, 글의 주제에 맞는 태그 또는 키워드로 검색한다.
+
+```powershell
+Invoke-WebRequest -UseBasicParsing -Uri "https://script.google.com/macros/s/AKfycbyldcNzji4n3p7J83aDR86udPYXKaa8_BAu-E6uNFLTc7VIld_v3UKjGQPtRa0QpaQE/exec" -Method POST -ContentType "text/plain;charset=utf-8" -Body '{"action":"load_quotes","token":"claude-feedback","tags":["태그1","태그2"]}'
+```
+
+키워드 본문 검색도 가능하다:
+
+```powershell
+Invoke-WebRequest -UseBasicParsing -Uri "https://script.google.com/macros/s/AKfycbyldcNzji4n3p7J83aDR86udPYXKaa8_BAu-E6uNFLTc7VIld_v3UKjGQPtRa0QpaQE/exec" -Method POST -ContentType "text/plain;charset=utf-8" -Body '{"action":"load_quotes","token":"claude-feedback","keyword":"검색어"}'
+```
+
+### 액션 3: list_books (등록된 책 목록 확인)
+
+```powershell
+Invoke-WebRequest -UseBasicParsing -Uri "https://script.google.com/macros/s/AKfycbyldcNzji4n3p7J83aDR86udPYXKaa8_BAu-E6uNFLTc7VIld_v3UKjGQPtRa0QpaQE/exec" -Method POST -ContentType "text/plain;charset=utf-8" -Body '{"action":"list_books","token":"claude-feedback"}'
+```
+
+### 태그 목록 (누적 관리)
+
+자기관찰, 습관, 관계, 일, 돈, 글쓰기, 죽음, 애도, 음식, 여행, 건강, 운동, 시간, 노화, 감정, 분노, 외로움, 가족, 직업, 반복, 동기부여, 소비, 행복, 고통, 자기수용, 평범함, 인간관계, 실패, 성공, 두려움, 자신감, 명상, 집중, 독서, 투자, 부, 교육, 사회, 정치, 자유, 창의성, 도덕, 정체성, 중독, 회복탄력성, 자존감, 결혼, 육아, 노동, 소통, 공감, 겸손, 욕망, 권력
+
+새 태그가 필요하면 이 목록에 추가한다.
+
+### JSON 데이터 구조
+
+```json
+[
+  {
+    "id": "book_001",
+    "book": "신경 끄기의 기술",
+    "author": "마크 맨슨",
+    "tags": ["행복", "고통", "자기수용", "평범함"],
+    "quotes": [
+      "행복을 추구하는 것은 자멸적이다...",
+      "투쟁이 성공을 결정한다..."
+    ],
+    "added": "2026-03-23"
+  }
+]
+```
+
+---
+
+## 7. 어구록 DB 등록 작업지시서 규칙
+
+### 사용자 입력 형식
+
+사용자가 아래와 같이 입력한다:
+
+```
+책: [제목]
+저자: [저자명]
+
+1. [발췌문1]
+2. [발췌문2]
+3. [발췌문3]
+```
+
+또는 자유 형식으로 올려도 된다. AI가 책 제목, 저자, 발췌문을 식별한다.
+
+### AI가 하는 일
+
+1. 입력에서 책 제목, 저자, 발췌문을 추출한다.
+2. 발췌문 내용을 기반으로 태그를 3~7개 판단한다. 6번의 태그 목록에서 선택하되, 목록에 없는 태그가 필요하면 새로 만든다.
+3. 작업지시서를 출력한다. 작업지시서에는 세 가지 Step이 포함된다:
+   - Step 1: GAS `add_book` 호출 (PowerShell 명령 — JSON DB에 추가)
+   - Step 2: 마크다운 파일에 어구록 추가 (해당 연도 파일에 append)
+   - Step 3: git add → commit → push
+
+### 작업지시서 예시
+
+```
+⚠️ 모든 Step을 빠짐없이 순서대로 실행하세요.
+
+프로젝트 경로 (모든 Step에서 이 절대 경로를 사용하세요)
+프로젝트: C:\dev\docs\
+
+작업지시서: '신경 끄기의 기술' 어구록 등록
+작업 유형: 어구록 추가
+
+Step 1 — JSON DB에 추가
+명령어:
+  Invoke-WebRequest -UseBasicParsing -Uri "GAS_URL" -Method POST -ContentType "text/plain;charset=utf-8" -Body '{"action":"add_book","token":"claude-feedback","book":"신경 끄기의 기술","author":"마크 맨슨","tags":["행복","고통","자기수용"],"quotes":["발췌문1","발췌문2"]}'
+완료 확인: 응답에 "status":"ok" 포함
+
+Step 2 — 마크다운 파일에 추가
+파일: C:\dev\docs\서재\서재_어구록_2026년.md
+위치: 파일 맨 끝
+작업: 아래 내용을 추가
+교체 내용:
+  [어구록 전문]
+완료 확인: 파일 끝에 새 어구록이 추가됨
+
+Step 3 — 커밋 & 푸시
+명령어:
+  cd "C:\dev\docs"
+  git add -A
+  git commit -m "어구록 추가: 신경 끄기의 기술"
+  git push origin main
+```
+
+---
+
+## 8. 변경 이력
 
 - 3/22: AGENTS.md 최초 생성. 파일 구조 맵 작성.
+- 3/23: GAS 어구록 DB 시스템 추가 (섹션 6, 7). add_book/load_quotes/list_books 액션.
