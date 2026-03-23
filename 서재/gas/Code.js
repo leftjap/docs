@@ -31,6 +31,9 @@ function doPost(e) {
       case 'scan_doc':
         result = handleScanDoc(data);
         break;
+      case 'update_author':
+        result = handleUpdateAuthor(data);
+        break;
       default:
         result = { status: 'error', message: 'Unknown action: ' + data.action };
     }
@@ -38,6 +41,49 @@ function doPost(e) {
   } catch (err) {
     console.error('doPost error:', err);
     return _jsonResponse({ status: 'error', message: String(err) });
+  }
+}
+
+// ═══ update_author ═══
+function handleUpdateAuthor(payload) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var data = getQuotesData();
+    var entries = payload.entries || [];
+    var updated = 0;
+    var notFound = [];
+
+    for (var i = 0; i < entries.length; i++) {
+      var entry = entries[i];
+      var foundIndex = -1;
+      for (var j = 0; j < data.length; j++) {
+        if (data[j].book === entry.book) {
+          foundIndex = j;
+          break;
+        }
+      }
+
+      if (foundIndex !== -1) {
+        data[foundIndex].author = entry.author;
+        updated++;
+      } else {
+        notFound.push(entry.book);
+      }
+    }
+
+    saveQuotesData(data);
+    return {
+      status: 'ok',
+      updated: updated,
+      notFound: notFound,
+      total: data.length
+    };
+  } catch (e) {
+    console.error('handleUpdateAuthor error:', e);
+    return { status: 'error', message: e.toString() };
+  } finally {
+    lock.releaseLock();
   }
 }
 
