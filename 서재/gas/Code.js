@@ -88,7 +88,28 @@ function handleUpdateAuthor(payload) {
 }
 
 function doGet(e) {
-  return _jsonResponse({ status: 'ok', message: 'seojai-quotes GAS is running' });
+  try {
+    var action = (e.parameter && e.parameter.action) ? e.parameter.action : '';
+    var token = (e.parameter && e.parameter.token) ? e.parameter.token : '';
+
+    if (action === 'load_quotes') {
+      if (VALID_TOKENS.indexOf(token) === -1) {
+        return _jsonResponse({ status: 'error', message: 'Unauthorized' });
+      }
+      var tagsParam = e.parameter.tags || '';
+      var keyword = e.parameter.keyword || '';
+      var payload = {
+        tags: tagsParam ? tagsParam.split(',') : [],
+        keyword: keyword,
+        limit: parseInt(e.parameter.limit || '15')
+      };
+      return _jsonResponse(handleLoadQuotes(payload));
+    }
+
+    return _jsonResponse({ status: 'ok', message: 'seojai-quotes GAS is running' });
+  } catch (err) {
+    return _jsonResponse({ status: 'error', message: String(err) });
+  }
 }
 
 function _jsonResponse(obj) {
