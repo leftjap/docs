@@ -208,6 +208,11 @@ Step N — 커밋 & 푸시
 ```
 C:\dev\docs\서재\
 ├── AGENTS.md                         ← 이 문서
+├── gas\                              ← GAS 소스코드 (clasp 연동)
+│   ├── Code.js                       ← GAS 메인 코드
+│   ├── .clasp.json                   ← clasp 프로젝트 설정
+│   └── appsscript.json               ← GAS 매니페스트
+├── scan_result.txt                   ← 100권 문서 스캔 결과 (참고용)
 ├── archive\                          ← 기존 파일 보관 (더 이상 수정 안 함)
 │   ├── 서재_어구록_15권.md
 │   ├── 서재_어구록_100권.md
@@ -271,6 +276,38 @@ Invoke-WebRequest -UseBasicParsing -Uri "https://script.google.com/macros/s/AKfy
 Invoke-WebRequest -UseBasicParsing -Uri "https://script.google.com/macros/s/AKfycbyldcNzji4n3p7J83aDR86udPYXKaa8_BAu-E6uNFLTc7VIld_v3UKjGQPtRa0QpaQE/exec" -Method POST -ContentType "text/plain;charset=utf-8" -Body '{"action":"list_books","token":"claude-feedback"}'
 ```
 
+### 액션 4: update_author (저자 일괄 업데이트)
+
+기존 DB의 quotes/tags를 건드리지 않고 author 필드만 수정한다. 여러 책을 한 번에 업데이트할 수 있다.
+
+```powershell
+Invoke-WebRequest -UseBasicParsing -Uri "https://script.google.com/macros/s/AKfycbyldcNzji4n3p7J83aDR86udPYXKaa8_BAu-E6uNFLTc7VIld_v3UKjGQPtRa0QpaQE/exec" -Method POST -ContentType "text/plain;charset=utf-8" -Body '{"action":"update_author","token":"claude-feedback","entries":[{"book":"책제목","author":"저자명"},{"book":"책제목2","author":"저자명2"}]}'
+```
+
+### 액션 5: import_from_doc (Google Docs에서 일괄 임포트)
+
+Google Docs 파일에서 BOOK_TITLES에 등록된 책을 자동으로 찾아 발췌문을 추출하고 DB에 저장한다. Code.js의 BOOK_TITLES 딕셔너리에 책 제목이 등록되어 있어야 한다.
+
+```powershell
+Invoke-WebRequest -UseBasicParsing -Uri "https://script.google.com/macros/s/AKfycbyldcNzji4n3p7J83aDR86udPYXKaa8_BAu-E6uNFLTc7VIld_v3UKjGQPtRa0QpaQE/exec" -Method POST -ContentType "text/plain;charset=utf-8" -Body '{"action":"import_from_doc","token":"claude-feedback","docId":"Google_Doc_ID"}'
+```
+
+Google Docs 파일 ID:
+
+| 파일 | docId |
+|---|---|
+| 100권 | `1XnV6UEx0ORogBbapzKE850Kvpu979WPUtXIJdvYi6NY` |
+| 15권 | `1MzIo40WbuSUlqBCK4WRLXpT7LpzOQ1BpsPzYjPXFrGE` |
+| 2026년 | `11dSrGX3j9y4vEXWSSoQMXet2Df8z0ca84ISmyIER3tU` |
+
+### 액션 6: scan_doc (Google Docs 구조 스캔)
+
+Google Docs 파일의 줄 단위 구조를 분석하여 BOOK_TITLES와 매칭되는 책 제목을 찾는다. 임포트 전 사전 점검용.
+
+```powershell
+Invoke-WebRequest -UseBasicParsing -Uri "https://script.google.com/macros/s/AKfycbyldcNzji4n3p7J83aDR86udPYXKaa8_BAu-E6uNFLTc7VIld_v3UKjGQPtRa0QpaQE/exec" -Method POST -ContentType "text/plain;charset=utf-8" -Body '{"action":"scan_doc","token":"claude-feedback","docId":"Google_Doc_ID"}'
+```
+
 ### 태그 목록 (누적 관리)
 
 자기관찰, 습관, 관계, 일, 돈, 글쓰기, 죽음, 애도, 음식, 여행, 건강, 운동, 시간, 노화, 감정, 분노, 외로움, 가족, 직업, 반복, 동기부여, 소비, 행복, 고통, 자기수용, 평범함, 인간관계, 실패, 성공, 두려움, 자신감, 명상, 집중, 독서, 투자, 부, 교육, 사회, 정치, 자유, 창의성, 도덕, 정체성, 중독, 회복탄력성, 자존감, 결혼, 육아, 노동, 소통, 공감, 겸손, 욕망, 권력
@@ -294,6 +331,33 @@ Invoke-WebRequest -UseBasicParsing -Uri "https://script.google.com/macros/s/AKfy
   }
 ]
 ```
+
+### GAS 코드 배포 절차 (clasp)
+
+Code.js를 수정한 뒤 GAS 서버에 반영하는 절차:
+
+1. VS Code에서 `C:\dev\docs\서재\gas\Code.js` 수정
+2. 터미널에서 실행:
+   ```
+   cd "C:\dev\docs\서재\gas"
+   npx clasp push --force
+   ```
+3. GAS 에디터(https://script.google.com)에서 수동 배포:
+   - 배포 → 배포 관리 → 연필 아이콘(수정) → 버전을 "새 버전"으로 변경 → 배포
+   - ⚠️ "새 배포"를 누르면 URL이 바뀌므로, 반드시 "배포 관리"에서 기존 배포를 수정할 것
+4. git add → commit → push (GitHub 백업)
+
+clasp push만으로는 웹앱에 반영되지 않는다. 반드시 3번(수동 배포)을 거쳐야 한다.
+
+### 현재 DB 상태 (2026-03-23 기준)
+
+| 항목 | 값 |
+|---|---|
+| 총 책 수 | 102권 |
+| 총 발췌문 수 | 991개 |
+| 저자 입력률 | 100% (102/102) |
+| 태그 상태 | 카테고리 기반 자동 태그 (세분화 미완) |
+| 소스 | 100권 파일 87권 + 15권 파일 10권 + 2026년 파일 4권 + 수동 1권 |
 
 ---
 
@@ -362,3 +426,6 @@ Step 3 — 커밋 & 푸시
 - 3/22: AGENTS.md 최초 생성. 파일 구조 맵 작성.
 - 3/23: GAS 어구록 DB 시스템 추가 (섹션 6, 7). add_book/load_quotes/list_books 액션.
 - 3/23: 폴더 구조 개편. 기존 파일 3개 archive로 이동. quotes 폴더에 주제별 6개 파일 생성 (문학, 자기계발, 심리학, 투자경제, 인문, 실용).
+- 3/23: GAS Code.js에 update_author 액션 추가. 102권 저자 정보 일괄 입력 (100%).
+- 3/23: 15권 파일 임포트 (9권 신규 + 1권 업데이트), 2026년 파일 임포트 (4권 신규). DB 총 102권 991발췌문.
+- 3/23: AGENTS.md 업데이트 — gas/ 폴더 구조, 신규 액션 (update_author, import_from_doc, scan_doc), clasp 배포 절차, DB 현황 추가.
