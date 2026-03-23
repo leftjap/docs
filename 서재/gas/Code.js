@@ -38,6 +38,9 @@ function doPost(e) {
       case 'migrate_tags':
         result = handleMigrateTags(data);
         break;
+      case 'update_quote_tags':
+        result = handleUpdateQuoteTags(data);
+        break;
       default:
         result = { status: 'error', message: 'Unknown action: ' + data.action };
     }
@@ -389,6 +392,56 @@ function handleMigrateTags(payload) {
     };
   } catch (e) {
     console.error('handleMigrateTags error:', e);
+    return { status: 'error', message: e.toString() };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ═══ update_quote_tags: 발췌문별 태그 업데이트 ═══
+// entries: [{ book: "책제목", quotes: [{ i: 0, tags: ["태그1", "t:감정", "f:형식"] }, ...] }, ...]
+function handleUpdateQuoteTags(payload) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var entries = payload.entries || [];
+    var data = getQuotesData();
+    var bookMap = {};
+    for (var i = 0; i < data.length; i++) {
+      bookMap[data[i].book] = data[i];
+    }
+
+    var updated = 0;
+    for (var e = 0; e < entries.length; e++) {
+      var entry = entries[e];
+      var bookObj = bookMap[entry.book];
+      if (!bookObj) continue;
+
+      if (!bookObj.quote_tags) bookObj.quote_tags = [];
+
+      // quote_tags 배열을 quotes와 같은 길이로 초기화
+      while (bookObj.quote_tags.length < bookObj.quotes.length) {
+        bookObj.quote_tags.push([]);
+      }
+
+      var entryQuotes = entry.quotes || [];
+      for (var q = 0; q < entryQuotes.length; q++) {
+        var quote = entryQuotes[q];
+        if (typeof quote.i === 'number' && quote.i >= 0 && quote.i < bookObj.quotes.length) {
+          bookObj.quote_tags[quote.i] = quote.tags || [];
+          updated++;
+        }
+      }
+    }
+
+    saveQuotesData(data);
+    return {
+      status: 'ok',
+      action: 'update_quote_tags',
+      updated_quotes: updated
+    };
+  } catch (e) {
+    console.error('handleUpdateQuoteTags error:', e);
     return { status: 'error', message: e.toString() };
   } finally {
     lock.releaseLock();
