@@ -360,118 +360,202 @@ var CATEGORY_TAGS = {
 };
 
 function handleImportFromDoc(payload) {
-  var lock = LockService.getScriptLock();
-  lock.waitLock(300000);
-
-  try {
-    var docId = payload.docId;
-    if (!docId) return { status: 'error', message: 'Missing docId' };
-
-    var fullText = fetchDocText(docId);
-    var sections = fullText.split(/_{5,}/);
-
-    var data = getQuotesData();
-    var imported = 0;
-    var updated = 0;
-    var unmatchedSections = [];
-    var currentBook = null;
-
-    for (var i = 0; i < sections.length; i++) {
-      var section = sections[i].trim();
-      if (!section || section.length < 20) continue;
-
-      var lines = section.split('\n');
-      var firstLine = '';
-      for (var j = 0; j < lines.length; j++) {
-        var trimmed = lines[j].trim();
-        if (trimmed.length > 0) { firstLine = trimmed; break; }
-      }
-      if (!firstLine) continue;
-
-      var matchedCategory = matchBookTitle(firstLine);
-
-      if (matchedCategory) {
-        if (currentBook) {
-          var saveResult = saveBookEntry(data, currentBook);
-          if (saveResult === 'added') imported++;
-          else if (saveResult === 'updated') updated++;
-        }
-
-        currentBook = {
-          title: firstLine,
-          category: matchedCategory.category,
-          quotes: []
-        };
-
-        var bodyQuotes = extractQuotes(section, firstLine);
-        for (var q = 0; q < bodyQuotes.length; q++) {
-          currentBook.quotes.push(bodyQuotes[q]);
-        }
-
-      } else {
-        if (currentBook) {
-          var subQuotes = extractQuotes(section, null);
-          for (var s = 0; s < subQuotes.length; s++) {
-            currentBook.quotes.push(subQuotes[s]);
-          }
-        } else {
-          unmatchedSections.push(firstLine.substring(0, 50));
-        }
-      }
-    }
-
-    if (currentBook) {
-      var lastResult = saveBookEntry(data, currentBook);
-      if (lastResult === 'added') imported++;
-      else if (lastResult === 'updated') updated++;
-    }
-
-    saveQuotesData(data);
-
-    return {
-      status: 'ok',
-      imported: imported,
-      updated: updated,
-      total: data.length,
-      unmatched: unmatchedSections
-    };
-
-  } catch (e) {
-    console.error('handleImportFromDoc error:', e);
-    return { status: 'error', message: e.toString() };
-  } finally {
-    lock.releaseLock();
+  var docId = payload.docId;
+  var text = fetchDocText(docId);
+  if (!text || text.length < 100) {
+    return { status: 'error', message: '문서를 읽지 못했습니다. 길이: ' + (text ? text.length : 0) };
   }
+
+  var lines = text.split('\n');
+  var titleKeys = Object.keys(BOOK_TITLES);
+
+  // 1단계: 각 책 제목이 등장하는 첫 번째 라인 번호 찾기
+  var bookPositions = [];
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].trim();
+    if (!line || /^_{3,}$/.test(line)) continue;
+
+    for (var t = 0; t < titleKeys.length; t++) {
+      var title = titleKeys[t];
+      if (line === title || (line.indexOf(title) === 0 && line.length <= title.length + 10)) {
+        var already = false;
+        for (var b = 0; b < bookPositions.length; b++) {
+          if (bookPositions[b].title === title) { already = true; break; }
+        }
+        if (!already) {
+          bookPositions.push({ lineNum: i, title: title, category: BOOK_TITLES[title] });
+        }
+        break;
+      }
+    }
+  }
+
+  bookPositions.sort(function(a, b) { return a.lineNum - b.lineNum; });
+
+  // 2단계: 각 책의 범위 결정
+  var data = getQuotesData();
+  var imported = 0, updated = 0, skipped = 0;
+  var bookResults = [];
+
+  for (var b = 0; b < bookPositions.length; b++) {
+    var startLine = bookPositions[b].lineNum + 1;
+    var endLine = (b + 1 < bookPositions.length) ? bookPositions[b + 1].lineNum : lines.length;
+    var title = bookPositions[b].title;
+    var category = bookPositions[b].category;
+    var tags = CATEGORY_TAGS[category] || ['기타'];
+
+    // 3단계: 범위 내에서 발췌문 추출
+    var quotes = [];
+    var currentQuote = [];
+
+    for (var j = startLine; j < endLine; j++) {
+      var l = lines[j].trim();
+
+      if (/^_{3,}$/.test(l)) {
+        if (currentQuote.length > 0) {
+          var qt = currentQuote.join(' ').trim();
+          if (qt.length >= 30) quotes.push(qt);
+          currentQuote = [];
+        }
+        continue;
+      }
+
+      if (!l) {
+        if (currentQuote.length > 0) {
+          var qt = currentQuote.join(' ').trim();
+          if (qt.length >= 30) {
+            quotes.push(qt);
+            currentQuote = [];
+          }
+        }
+        continue;
+      }
+
+      if (l.length <= 40 && l.length >= 2) {
+        var lastCh = l.charAt(l.length - 1);
+        if ('.。!?…,다)'.indexOf(lastCh) < 0) {
+          if (currentQuote.length > 0) {
+            var qt = currentQuote.join(' ').trim();
+            if (qt.length >= 30) quotes.push(qt);
+            currentQuote = [];
+          }
+          continue;
+        }
+      }
+
+      currentQuote.push(l);
+    }
+
+    if (currentQuote.length > 0) {
+      var qt = currentQuote.join(' ').trim();
+      if (qt.length >= 30) quotes.push(qt);
+    }
+
+    if (quotes.length === 0) {
+      skipped++;
+      bookResults.push({ title: title, status: 'skipped', reason: 'no quotes' });
+      continue;
+    }
+
+    // 4단계: DB에 저장/업데이트
+    var existingIdx = -1;
+    for (var d = 0; d < data.length; d++) {
+      if (data[d].book === title) { existingIdx = d; break; }
+    }
+
+    if (existingIdx >= 0) {
+      var existing = data[existingIdx];
+      var beforeCount = existing.quotes.length;
+      for (var q = 0; q < quotes.length; q++) {
+        var isDup = false;
+        for (var e = 0; e < existing.quotes.length; e++) {
+          if (existing.quotes[e] === quotes[q]) { isDup = true; break; }
+        }
+        if (!isDup) {
+          existing.quotes.push(quotes[q]);
+        }
+      }
+      var afterCount = existing.quotes.length;
+      updated++;
+      bookResults.push({ title: title, status: 'updated', before: beforeCount, after: afterCount });
+    } else {
+      var padded = String(data.length + 1);
+      while (padded.length < 3) padded = '0' + padded;
+      var id = 'book_' + padded;
+
+      var newBook = {
+        id: id,
+        book: title,
+        author: '',
+        category: category,
+        tags: tags,
+        quotes: quotes,
+        added: new Date().toISOString().split('T')[0]
+      };
+      data.push(newBook);
+      imported++;
+      bookResults.push({ title: title, status: 'imported', quotes: newBook.quotes.length });
+    }
+  }
+
+  saveQuotesData(data);
+
+  return {
+    status: 'ok',
+    totalBooksInDoc: bookPositions.length,
+    imported: imported,
+    updated: updated,
+    skipped: skipped,
+    totalBooksInDB: data.length,
+    books: bookResults
+  };
 }
 
-// ═══ scan_doc: 전수 조사 — 섹션별 첫 줄의 MATCH/MISS 목록 반환 ═══
+// ═══ scan_doc: 줄 단위 스캔 — 잠재적 책 제목 후보 추출 ═══
 function handleScanDoc(payload) {
   try {
     var docId = payload.docId;
-    if (!docId) return { status: 'error', message: 'Missing docId' };
+    var text = fetchDocText(docId);
 
-    var fullText = fetchDocText(docId);
-    var sections = fullText.split(/_{5,}/);
-    var results = [];
+    var lines = text.split('\n');
+    var candidates = [];
 
-    for (var i = 0; i < sections.length; i++) {
-      var s = sections[i].trim();
-      if (!s || s.length < 20) continue;
-      var lines = s.split('\n');
-      var firstLine = '';
-      for (var j = 0; j < lines.length; j++) {
-        if (lines[j].trim().length > 0) { firstLine = lines[j].trim(); break; }
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].trim();
+
+      if (!line || /^_{3,}$/.test(line) || line.charAt(0) === '💡') continue;
+
+      if (line.length >= 2 && line.length <= 40) {
+        var lastChar = line.charAt(line.length - 1);
+        if ('.。!?…, 다)'.indexOf(lastChar) >= 0) continue;
+
+        var matched = matchBookTitle(line);
+        var status = matched ? 'MATCH' : 'CANDIDATE';
+        candidates.push({
+          lineNum: i + 1,
+          text: line,
+          status: status,
+          matchedTo: matched ? matched.title : null
+        });
       }
-      var matched = matchBookTitle(firstLine) ? 'MATCH' : 'MISS';
-      results.push(matched + ' | ' + firstLine.substring(0, 60));
+    }
+
+    var titleKeys = Object.keys(BOOK_TITLES);
+    var foundInText = [];
+    for (var t = 0; t < titleKeys.length; t++) {
+      if (text.indexOf(titleKeys[t]) >= 0) {
+        foundInText.push(titleKeys[t]);
+      }
     }
 
     return {
       status: 'ok',
-      totalSections: results.length,
-      matchCount: results.filter(function(r) { return r.indexOf('MATCH') === 0; }).length,
-      missCount: results.filter(function(r) { return r.indexOf('MISS') === 0; }).length,
-      sections: results
+      totalLines: lines.length,
+      textLength: text.length,
+      candidates: candidates.length,
+      candidateList: candidates.slice(0, 500),
+      bookTitlesFoundInText: foundInText,
+      bookTitlesTotal: titleKeys.length
     };
   } catch (e) {
     return { status: 'error', message: e.toString() };
