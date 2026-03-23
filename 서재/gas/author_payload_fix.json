@@ -1,0 +1,8 @@
+{
+  "action": "update_author",
+  "token": "claude-feedback",
+  "entries": [
+    {"book": "편하게 사는 삶과 인간답게 사는 삶", "author": "홍세화"},
+    {"book": "혹시 당신도 '음식 문맹자'인가요?", "author": "박정훈"}
+  ]
+}
