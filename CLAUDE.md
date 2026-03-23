@@ -96,7 +96,7 @@
 
 | ID | 프로젝트 | 작업 | 메모 |
 |---|---|---|---|
-| I-01 | 전체 | AGENTS.md 경량화: 참조 정보(상세 맵, 호출 체인, 디버깅)를 AGENTS-ref.md로 분리. AGENTS.md는 핵심 규칙만 유지 | A방식(분리) 확정, 후순위 |
+| I-01 | 전체 | 문서 경량화: ①AGENTS.md → 핵심 규칙만 남기고 참조 정보를 AGENTS-ref.md로 분리. ②CLAUDE.md → 백로그 상세를 backlog.md로 분리, Haiku 규칙(6번)을 haiku-rules.md로 분리. 루트 문서는 라우터+요약만 유지 | A방식(분리) 확정. 기준: always-on 100줄 이하, instruction budget ~100개. P0 버그 해소 직후 실행 |
 | I-02 | 전체 | 웹앱 AGENTS.md 공통 섹션 템플릿화 | |
 | I-03 | 어학 | Phase 2 이후 전체 (할 게 많음 — 별도 세션에서 분해) | |
 
@@ -130,6 +130,7 @@ AI는 작업지시서 출력 전에 이 목록을 스캔한다.
 | L-06 | import 시 날짜 밀림 | MUST: import 후 미래 날짜 확인 Step | 이름표 |
 | L-07 | 멀티유저 설정 오염 | MUST: USER_CONFIG 보호 체크리스트 확인 | 이름표 |
 | L-08 | sed/tr로 파일 소실 | MUST NOT: Unix 텍스트 도구 사용 금지. PowerShell 또는 VS Code만 | 전체 |
+| L-09 | CLAUDE.md/AGENTS.md 비대화로 AI 준수율 하락 | MUST: 루트 문서는 라우터 역할. 상시 로드 100줄 이하 목표. 작업별 상세는 별도 파일로 progressive disclosure. Instruction budget ~150개 (시스템 프롬프트 ~50개 차감 후 사용자 몫 ~100개) | 전체 |
 
 ---
 
@@ -196,4 +197,5 @@ AI는 작업지시서 출력 전에 이 목록을 스캔한다.
 
 ## 7. 변경 이력
 
+- 3/24: L-09 추가 (문서 비대화 방지). I-01 범위 확장 (CLAUDE.md 경량화 포함, 실행 기준 수치 추가).
 - 3/23: CLAUDE.md 최초 생성. 프로젝트 맵 7개, 백로그 8건+아이디어 3건, 교훈 8건, 검증 3단계, Haiku 규칙, 우선순위 프레임워크.
