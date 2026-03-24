@@ -411,23 +411,23 @@ Step N — 커밋 & 푸시
 - 확신 수준을 구분한다: "확실합니다" / "높은 확률이지만 검증 필요" / "추측입니다".
 - 쉬운 방법과 올바른 방법이 있으면 올바른 방법을 추천하고 이유를 밝힌다.
 
-### CLAUDE.md 갱신 규칙
+### playbook.md 갱신 규칙
 
-모든 작업지시서의 커밋 & 푸시 Step 직전에 CLAUDE.md 갱신 Step을 포함한다.
+모든 작업지시서의 커밋 & 푸시 Step 직전에 playbook.md 갱신 Step을 포함한다.
 
-- 파일: `C:\dev\docs\CLAUDE.md`
+- 파일: `C:\dev\playbook-config\playbook.md`
 - 갱신 대상: 2번 백로그 표에서 해당 작업의 상태를 변경한다.
   - 완료 시: 해당 행을 삭제하고 변경 이력(7번)에 완료 기록 추가
   - 새 이슈 발견 시: 🟡 대기에 새 행 추가 (ID는 B-XX 채번)
   - 진행 상태 변경 시: 상태/메모 컬럼 갱신
 - 갱신 후 별도 커밋:
   ```
-  cd "C:\dev\docs"
-  git add CLAUDE.md
-  git commit -m "update: CLAUDE.md [변경 요약]"
+  cd "C:\dev\playbook-config"
+  git add playbook.md
+  git commit -m "update: playbook.md [변경 요약]"
   git push origin main
   ```
-- CLAUDE.md 갱신이 불필요한 경우: 일기 항목 추가, 오타 수정 등 백로그에 등록된 작업이 아닌 사소한 수정
+- playbook.md 갱신이 불필요한 경우: 일기 항목 추가, 오타 수정 등 백로그에 등록된 작업이 아닌 사소한 수정
 
 ---
 
