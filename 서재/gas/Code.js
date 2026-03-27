@@ -1,5 +1,4 @@
-/* ═══ Code.gs — 서재 어구록 GAS v2 ═══ */
-/* 변경: 발췌문 단위 태그 체계, AND 매칭, migrate_tags 액션 추가 */
+/* ═══ Code.gs — 서재 어구록 GAS ═══ */
 
 var VALID_TOKENS = ['claude-feedback'];
 var QUOTES_FOLDER = 'seojai-quotes';
@@ -35,12 +34,6 @@ function doPost(e) {
       case 'update_author':
         result = handleUpdateAuthor(data);
         break;
-      case 'migrate_tags':
-        result = handleMigrateTags(data);
-        break;
-      case 'update_quote_tags':
-        result = handleUpdateQuoteTags(data);
-        break;
       default:
         result = { status: 'error', message: 'Unknown action: ' + data.action };
     }
@@ -51,8 +44,72 @@ function doPost(e) {
   }
 }
 
+// ═══ update_author ═══
+function handleUpdateAuthor(payload) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var data = getQuotesData();
+    var entries = payload.entries || [];
+    var updated = 0;
+    var notFound = [];
+
+    for (var i = 0; i < entries.length; i++) {
+      var entry = entries[i];
+      var foundIndex = -1;
+      for (var j = 0; j < data.length; j++) {
+        if (data[j].book === entry.book) {
+          foundIndex = j;
+          break;
+        }
+      }
+
+      if (foundIndex !== -1) {
+        data[foundIndex].author = entry.author;
+        updated++;
+      } else {
+        notFound.push(entry.book);
+      }
+    }
+
+    saveQuotesData(data);
+    return {
+      status: 'ok',
+      updated: updated,
+      notFound: notFound,
+      total: data.length
+    };
+  } catch (e) {
+    console.error('handleUpdateAuthor error:', e);
+    return { status: 'error', message: e.toString() };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function doGet(e) {
-  return _jsonResponse({ status: 'ok', message: 'seojai-quotes GAS v2. Use POST for all actions.' });
+  try {
+    var action = (e.parameter && e.parameter.action) ? e.parameter.action : '';
+    var token = (e.parameter && e.parameter.token) ? e.parameter.token : '';
+
+    if (action === 'load_quotes') {
+      if (VALID_TOKENS.indexOf(token) === -1) {
+        return _jsonResponse({ status: 'error', message: 'Unauthorized' });
+      }
+      var tagsParam = e.parameter.tags || '';
+      var keyword = e.parameter.keyword || '';
+      var payload = {
+        tags: tagsParam ? tagsParam.split(',') : [],
+        keyword: keyword,
+        limit: parseInt(e.parameter.limit || '15')
+      };
+      return _jsonResponse(handleLoadQuotes(payload));
+    }
+
+    return _jsonResponse({ status: 'ok', message: 'seojai-quotes GAS is running' });
+  } catch (err) {
+    return _jsonResponse({ status: 'error', message: String(err) });
+  }
 }
 
 function _jsonResponse(obj) {
@@ -101,7 +158,7 @@ function fetchDocText(docId) {
   return response.getContentText('utf-8');
 }
 
-// ═══ add_book (v2: quotes는 {text,tags}[] 구조) ═══
+// ═══ add_book ═══
 function handleAddBook(payload) {
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -116,26 +173,12 @@ function handleAddBook(payload) {
       }
     }
 
-    // quotes 배열 정규화: string이면 {text, tags:[]} 로 변환
-    var normalizedQuotes = [];
-    var rawQuotes = payload.quotes || [];
-    for (var q = 0; q < rawQuotes.length; q++) {
-      if (typeof rawQuotes[q] === 'string') {
-        normalizedQuotes.push({ text: rawQuotes[q], tags: [] });
-      } else {
-        normalizedQuotes.push({
-          text: rawQuotes[q].text || '',
-          tags: rawQuotes[q].tags || []
-        });
-      }
-    }
-
     var entry = {
       id: existingIndex !== -1 ? data[existingIndex].id : 'book_' + String(data.length + 1).padStart(3, '0'),
       book: payload.book,
       author: payload.author || '',
       tags: payload.tags || [],
-      quotes: normalizedQuotes,
+      quotes: payload.quotes || [],
       added: new Date().toISOString().slice(0, 10)
     };
 
@@ -150,7 +193,6 @@ function handleAddBook(payload) {
       status: 'ok',
       id: entry.id,
       action: existingIndex !== -1 ? 'updated' : 'added',
-      quoteCount: normalizedQuotes.length,
       total: data.length
     };
   } catch (e) {
@@ -161,95 +203,57 @@ function handleAddBook(payload) {
   }
 }
 
-// ═══ load_quotes (v2: 발췌문 단위 AND 매칭) ═══
+// ═══ load_quotes ═══
 function handleLoadQuotes(payload) {
   try {
     var data = getQuotesData();
     var searchTags = payload.tags || [];
     var keyword = (payload.keyword || '').toLowerCase();
-    var limit = payload.limit || 10;
+    var limit = payload.limit || 15;
     var results = [];
 
     for (var i = 0; i < data.length; i++) {
       var book = data[i];
-      var quotes = book.quotes || [];
+      var matched = false;
 
-      for (var q = 0; q < quotes.length; q++) {
-        var quote = quotes[q];
-
-        // v2 구조: {text, tags}
-        var qText = '';
-        var qTags = [];
-        if (typeof quote === 'string') {
-          // 마이그레이션 전 레거시 데이터 대응
-          qText = quote;
-          qTags = book.tags || [];
-        } else {
-          qText = quote.text || '';
-          qTags = (quote.tags && quote.tags.length > 0) ? quote.tags : (book.tags || []);
-        }
-
-        var matched = false;
-
-        // 태그 AND 매칭: 요청한 태그가 모두 포함되어야 함
-        if (searchTags.length > 0) {
-          var allMatch = true;
-          for (var s = 0; s < searchTags.length; s++) {
-            if (qTags.indexOf(searchTags[s]) === -1) {
-              allMatch = false;
-              break;
-            }
-          }
-          matched = allMatch;
-        }
-
-        // 키워드 본문 매칭 (태그 매칭이 없거나 실패한 경우)
-        if (!matched && keyword) {
-          if (qText.toLowerCase().indexOf(keyword) !== -1) {
+      if (searchTags.length > 0) {
+        for (var j = 0; j < searchTags.length; j++) {
+          if (book.tags.indexOf(searchTags[j]) !== -1) {
             matched = true;
+            break;
           }
         }
+      }
 
-        if (matched) {
-          // 태그 매칭 점수 계산 (정렬용)
-          var tagScore = 0;
-          if (searchTags.length > 0) {
-            for (var ts = 0; ts < searchTags.length; ts++) {
-              if (qTags.indexOf(searchTags[ts]) !== -1) tagScore++;
-            }
+      if (!matched && keyword) {
+        for (var k = 0; k < book.quotes.length; k++) {
+          if (book.quotes[k].toLowerCase().indexOf(keyword) !== -1) {
+            matched = true;
+            break;
           }
+        }
+      }
 
+      if (matched) {
+        for (var m = 0; m < book.quotes.length; m++) {
           results.push({
             book: book.book,
-            author: book.author || '',
-            text: qText,
-            tags: qTags,
-            _score: tagScore
+            author: book.author,
+            text: book.quotes[m],
+            tags: book.tags
           });
         }
       }
     }
 
-    // 태그 매칭 점수 내림차순 정렬
-    results.sort(function(a, b) { return b._score - a._score; });
-
-    // _score 필드 제거 + limit 적용
-    var finalResults = [];
-    for (var r = 0; r < results.length && r < limit; r++) {
-      var item = results[r];
-      finalResults.push({
-        book: item.book,
-        author: item.author,
-        text: item.text,
-        tags: item.tags
-      });
+    if (results.length > limit) {
+      results = results.slice(0, limit);
     }
 
     return {
       status: 'ok',
-      count: finalResults.length,
-      totalMatched: results.length,
-      results: finalResults
+      count: results.length,
+      results: results
     };
   } catch (e) {
     console.error('handleLoadQuotes error:', e);
@@ -262,189 +266,22 @@ function handleListBooks() {
   try {
     var data = getQuotesData();
     var list = [];
-    var totalQuotes = 0;
-    var migratedBooks = 0;
-    var legacyBooks = 0;
-
     for (var i = 0; i < data.length; i++) {
-      var book = data[i];
-      var qCount = (book.quotes || []).length;
-      totalQuotes += qCount;
-
-      // 마이그레이션 상태 확인
-      var isMigrated = false;
-      if (qCount > 0) {
-        var firstQuote = book.quotes[0];
-        isMigrated = (typeof firstQuote === 'object' && firstQuote.text !== undefined);
-      }
-      if (isMigrated) migratedBooks++;
-      else if (qCount > 0) legacyBooks++;
-
       list.push({
-        id: book.id,
-        book: book.book,
-        author: book.author || '',
-        tags: book.tags,
-        quoteCount: qCount,
-        migrated: isMigrated
+        id: data[i].id,
+        book: data[i].book,
+        author: data[i].author,
+        tags: data[i].tags,
+        quoteCount: data[i].quotes.length
       });
     }
-
     return {
       status: 'ok',
       total: list.length,
-      totalQuotes: totalQuotes,
-      migratedBooks: migratedBooks,
-      legacyBooks: legacyBooks,
       books: list
     };
   } catch (e) {
     return { status: 'error', message: e.toString() };
-  }
-}
-
-// ═══ update_author ═══
-function handleUpdateAuthor(payload) {
-  var lock = LockService.getScriptLock();
-  lock.waitLock(30000);
-  try {
-    var data = getQuotesData();
-    var entries = payload.entries || [];
-    var updated = 0;
-    var notFound = [];
-
-    for (var i = 0; i < entries.length; i++) {
-      var entry = entries[i];
-      var foundIndex = -1;
-      for (var j = 0; j < data.length; j++) {
-        if (data[j].book === entry.book) {
-          foundIndex = j;
-          break;
-        }
-      }
-
-      if (foundIndex !== -1) {
-        data[foundIndex].author = entry.author;
-        updated++;
-      } else {
-        notFound.push(entry.book);
-      }
-    }
-
-    saveQuotesData(data);
-    return {
-      status: 'ok',
-      updated: updated,
-      notFound: notFound,
-      total: data.length
-    };
-  } catch (e) {
-    console.error('handleUpdateAuthor error:', e);
-    return { status: 'error', message: e.toString() };
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-// ═══ migrate_tags: 기존 string[] → {text,tags}[] 변환 ═══
-// 이 액션은 quotes를 구조만 변환한다. 발췌문별 태그는 빈 배열로 둔다.
-// 이후 AI가 add_book으로 책 단위로 태그가 부여된 발췌문을 덮어쓴다.
-function handleMigrateTags(payload) {
-  var lock = LockService.getScriptLock();
-  lock.waitLock(30000);
-  try {
-    var data = getQuotesData();
-    var migrated = 0;
-    var alreadyMigrated = 0;
-    var totalQuotes = 0;
-
-    for (var i = 0; i < data.length; i++) {
-      var book = data[i];
-      var quotes = book.quotes || [];
-      if (quotes.length === 0) continue;
-
-      // 이미 마이그레이션된 책인지 확인
-      if (typeof quotes[0] === 'object' && quotes[0].text !== undefined) {
-        alreadyMigrated++;
-        totalQuotes += quotes.length;
-        continue;
-      }
-
-      // string[] → {text, tags}[] 변환
-      var newQuotes = [];
-      for (var q = 0; q < quotes.length; q++) {
-        if (typeof quotes[q] === 'string') {
-          newQuotes.push({ text: quotes[q], tags: [] });
-          totalQuotes++;
-        }
-      }
-      book.quotes = newQuotes;
-      migrated++;
-    }
-
-    saveQuotesData(data);
-    return {
-      status: 'ok',
-      migrated: migrated,
-      alreadyMigrated: alreadyMigrated,
-      totalBooks: data.length,
-      totalQuotes: totalQuotes
-    };
-  } catch (e) {
-    console.error('handleMigrateTags error:', e);
-    return { status: 'error', message: e.toString() };
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-// ═══ update_quote_tags: 발췌문별 태그 업데이트 ═══
-// entries: [{ book: "책제목", quotes: [{ i: 0, tags: ["태그1", "t:감정", "f:형식"] }, ...] }, ...]
-function handleUpdateQuoteTags(payload) {
-  var lock = LockService.getScriptLock();
-  lock.waitLock(30000);
-  try {
-    var entries = payload.entries || [];
-    var data = getQuotesData();
-    var bookMap = {};
-    for (var i = 0; i < data.length; i++) {
-      bookMap[data[i].book] = data[i];
-    }
-
-    var updated = 0;
-    for (var e = 0; e < entries.length; e++) {
-      var entry = entries[e];
-      var bookObj = bookMap[entry.book];
-      if (!bookObj) continue;
-
-      if (!bookObj.quote_tags) bookObj.quote_tags = [];
-
-      // quote_tags 배열을 quotes와 같은 길이로 초기화
-      while (bookObj.quote_tags.length < bookObj.quotes.length) {
-        bookObj.quote_tags.push([]);
-      }
-
-      var entryQuotes = entry.quotes || [];
-      for (var q = 0; q < entryQuotes.length; q++) {
-        var quote = entryQuotes[q];
-        if (typeof quote.i === 'number' && quote.i >= 0 && quote.i < bookObj.quotes.length) {
-          bookObj.quote_tags[quote.i] = quote.tags || [];
-          updated++;
-        }
-      }
-    }
-
-    saveQuotesData(data);
-    return {
-      status: 'ok',
-      action: 'update_quote_tags',
-      updated_quotes: updated
-    };
-  } catch (e) {
-    console.error('handleUpdateQuoteTags error:', e);
-    return { status: 'error', message: e.toString() };
-  } finally {
-    lock.releaseLock();
   }
 }
 
@@ -599,6 +436,7 @@ function handleImportFromDoc(payload) {
   var lines = text.split('\n');
   var titleKeys = Object.keys(BOOK_TITLES);
 
+  // 1단계: 각 책 제목이 등장하는 첫 번째 라인 번호 찾기
   var bookPositions = [];
   for (var i = 0; i < lines.length; i++) {
     var line = lines[i].trim();
@@ -621,6 +459,7 @@ function handleImportFromDoc(payload) {
 
   bookPositions.sort(function(a, b) { return a.lineNum - b.lineNum; });
 
+  // 2단계: 각 책의 범위 결정
   var data = getQuotesData();
   var imported = 0, updated = 0, skipped = 0;
   var bookResults = [];
@@ -632,6 +471,7 @@ function handleImportFromDoc(payload) {
     var category = bookPositions[b].category;
     var tags = CATEGORY_TAGS[category] || ['기타'];
 
+    // 3단계: 범위 내에서 발췌문 추출
     var quotes = [];
     var currentQuote = [];
 
@@ -641,7 +481,7 @@ function handleImportFromDoc(payload) {
       if (/^_{3,}$/.test(l)) {
         if (currentQuote.length > 0) {
           var qt = currentQuote.join(' ').trim();
-          if (qt.length >= 30) quotes.push({ text: qt, tags: [] });
+          if (qt.length >= 30) quotes.push(qt);
           currentQuote = [];
         }
         continue;
@@ -651,7 +491,7 @@ function handleImportFromDoc(payload) {
         if (currentQuote.length > 0) {
           var qt = currentQuote.join(' ').trim();
           if (qt.length >= 30) {
-            quotes.push({ text: qt, tags: [] });
+            quotes.push(qt);
             currentQuote = [];
           }
         }
@@ -663,7 +503,7 @@ function handleImportFromDoc(payload) {
         if ('.。!?…,다)'.indexOf(lastCh) < 0) {
           if (currentQuote.length > 0) {
             var qt = currentQuote.join(' ').trim();
-            if (qt.length >= 30) quotes.push({ text: qt, tags: [] });
+            if (qt.length >= 30) quotes.push(qt);
             currentQuote = [];
           }
           continue;
@@ -675,7 +515,7 @@ function handleImportFromDoc(payload) {
 
     if (currentQuote.length > 0) {
       var qt = currentQuote.join(' ').trim();
-      if (qt.length >= 30) quotes.push({ text: qt, tags: [] });
+      if (qt.length >= 30) quotes.push(qt);
     }
 
     if (quotes.length === 0) {
@@ -684,6 +524,7 @@ function handleImportFromDoc(payload) {
       continue;
     }
 
+    // 4단계: DB에 저장/업데이트
     var existingIdx = -1;
     for (var d = 0; d < data.length; d++) {
       if (data[d].book === title) { existingIdx = d; break; }
@@ -692,15 +533,13 @@ function handleImportFromDoc(payload) {
     if (existingIdx >= 0) {
       var existing = data[existingIdx];
       var beforeCount = existing.quotes.length;
-      for (var qx = 0; qx < quotes.length; qx++) {
+      for (var q = 0; q < quotes.length; q++) {
         var isDup = false;
-        var newText = quotes[qx].text;
-        for (var ex = 0; ex < existing.quotes.length; ex++) {
-          var existText = (typeof existing.quotes[ex] === 'string') ? existing.quotes[ex] : existing.quotes[ex].text;
-          if (existText === newText) { isDup = true; break; }
+        for (var e = 0; e < existing.quotes.length; e++) {
+          if (existing.quotes[e] === quotes[q]) { isDup = true; break; }
         }
         if (!isDup) {
-          existing.quotes.push(quotes[qx]);
+          existing.quotes.push(quotes[q]);
         }
       }
       var afterCount = existing.quotes.length;
@@ -739,7 +578,7 @@ function handleImportFromDoc(payload) {
   };
 }
 
-// ═══ scan_doc ═══
+// ═══ scan_doc: 줄 단위 스캔 — 잠재적 책 제목 후보 추출 ═══
 function handleScanDoc(payload) {
   try {
     var docId = payload.docId;
@@ -801,6 +640,70 @@ function matchBookTitle(firstLine) {
     }
   }
   return null;
+}
+
+function extractQuotes(sectionText, skipLine) {
+  var quotes = [];
+  var lines = sectionText.split('\n');
+  var current = '';
+  var pastSkip = (skipLine === null);
+
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].trim();
+
+    if (!pastSkip) {
+      if (line === skipLine) {
+        pastSkip = true;
+        continue;
+      }
+      if (line.length === 0) continue;
+      pastSkip = true;
+    }
+
+    if (line.length === 0) {
+      if (current.length > 20) {
+        quotes.push(current);
+      }
+      current = '';
+    } else {
+      if (current.length > 0) current += '\n';
+      current += line;
+    }
+  }
+
+  if (current.length > 20) {
+    quotes.push(current);
+  }
+
+  return quotes;
+}
+
+function saveBookEntry(data, bookInfo) {
+  var existingIndex = -1;
+  for (var i = 0; i < data.length; i++) {
+    if (data[i].book === bookInfo.title) {
+      existingIndex = i;
+      break;
+    }
+  }
+
+  var entry = {
+    id: existingIndex !== -1 ? data[existingIndex].id : 'book_' + String(data.length + 1).padStart(3, '0'),
+    book: bookInfo.title,
+    author: '',
+    tags: CATEGORY_TAGS[bookInfo.category] || ['미분류'],
+    category: bookInfo.category,
+    quotes: bookInfo.quotes,
+    added: new Date().toISOString().slice(0, 10)
+  };
+
+  if (existingIndex !== -1) {
+    data[existingIndex] = entry;
+    return 'updated';
+  } else {
+    data.push(entry);
+    return 'added';
+  }
 }
 
 // ═══ 디버깅용 (GAS 에디터에서 직접 실행) ═══
