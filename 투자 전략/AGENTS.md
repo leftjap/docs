@@ -200,14 +200,14 @@ Step N — 커밋 & 푸시
 
 모든 작업지시서의 커밋 & 푸시 Step 직전에 playbook.md 갱신 Step을 포함한다.
 
-- 파일: `C:\dev\playbook-config\playbook.md`
+- 파일: `C:\dev\playbook\playbook.md`
 - 갱신 대상: 2번 백로그 표에서 해당 작업의 상태를 변경한다.
   - 완료 시: 해당 행을 삭제하고 변경 이력(7번)에 완료 기록 추가
   - 새 이슈 발견 시: 🟡 대기에 새 행 추가 (ID는 B-XX 채번)
   - 진행 상태 변경 시: 상태/메모 컬럼 갱신
 - 갱신 후 별도 커밋:
   ```
-  cd "C:\dev\playbook-config"
+  cd "C:\dev\playbook"
   git add playbook.md
   git commit -m "update: playbook.md [변경 요약]"
   git push origin main
