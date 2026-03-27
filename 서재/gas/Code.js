@@ -52,7 +52,51 @@ function doPost(e) {
 }
 
 function doGet(e) {
-  return _jsonResponse({ status: 'ok', message: 'seojai-quotes GAS v2. Use POST for all actions.' });
+  try {
+    var params = e.parameter || {};
+    var action = params.action || '';
+    var token = params.token || '';
+
+    // 토큰 없거나 액션 없으면 기존 안내 메시지
+    if (!action || !token) {
+      return _jsonResponse({ status: 'ok', message: 'seojai-quotes GAS v2. Use POST for write actions. GET supports: load_quotes, list_books' });
+    }
+
+    // 토큰 검증
+    if (VALID_TOKENS.indexOf(token) === -1) {
+      return _jsonResponse({ status: 'error', message: 'Unauthorized' });
+    }
+
+    var result;
+    switch (action) {
+      case 'load_quotes':
+        // GET 파라미터를 handleLoadQuotes가 기대하는 형태로 변환
+        var payload = {};
+        if (params.tags) {
+          payload.tags = params.tags.split(',').map(function(t) { return t.trim(); });
+        }
+        if (params.keyword) {
+          payload.keyword = params.keyword;
+        }
+        if (params.limit) {
+          payload.limit = parseInt(params.limit, 10) || 10;
+        }
+        result = handleLoadQuotes(payload);
+        break;
+
+      case 'list_books':
+        result = handleListBooks();
+        break;
+
+      default:
+        result = { status: 'error', message: 'GET only supports: load_quotes, list_books. Use POST for: ' + action };
+    }
+
+    return _jsonResponse(result);
+  } catch (err) {
+    console.error('doGet error:', err);
+    return _jsonResponse({ status: 'error', message: String(err) });
+  }
 }
 
 function _jsonResponse(obj) {
