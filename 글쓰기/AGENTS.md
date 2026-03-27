@@ -17,8 +17,8 @@
    업로드된 파일이 없으면 GitHub raw URL로 직접 크롤링한다.
 4. 트랙 A이면 바로 작업지시서를 출력한다.
    트랙 B이면 방향 확인서를 먼저 출력한다.
-5. 사용자가 작업지시서를 VS Code 에이전트에 복사해서 실행한다.
-6. VS Code 에이전트는 문서 수정 → git add → git commit → git push를 모두 완료한다.
+5. 사용자가 작업지시서를 Claude Code에 붙여넣어 실행한다.
+6. Claude Code는 문서 수정 → git add → git commit → git push를 모두 완료한다.
 
 ---
 

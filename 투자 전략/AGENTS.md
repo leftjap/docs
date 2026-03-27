@@ -17,8 +17,8 @@
    업로드된 파일이 없으면 GitHub raw URL로 직접 크롤링한다.
 4. 트랙 A이면 바로 작업지시서를 출력한다.
    트랙 B이면 방향 확인서를 먼저 출력한다.
-5. 사용자가 작업지시서를 VS Code 에이전트에 복사해서 실행한다.
-6. VS Code 에이전트는 문서 수정 → git add → git commit → git push를 모두 완료한다.
+5. 사용자가 작업지시서를 Claude Code에 붙여넣어 실행한다.
+6. Claude Code는 문서 수정 → git add → git commit → git push를 모두 완료한다.
 
 ---
 
@@ -155,23 +155,6 @@ Step N — 커밋 & 푸시
 **새 내용 추가 시:**
 - 삽입 위치를 "X.X절 [제목]의 마지막 인용구 블록 아래" 수준으로 명시한다.
 - 추가할 내용 전체를 제공한다.
-
-### 파일 내용 일괄 치환 규칙
-
-파일 내부의 문자열을 일괄 치환할 때:
-
-**사용할 것:**
-- VS Code의 Ctrl + H (찾기/바꾸기)
-- PowerShell의 `(Get-Content) -replace`
-
-**사용하지 않을 것:**
-- `sed`, `tr` 등 Unix 텍스트 처리 도구
-
-**PowerShell 치환 예시:**
-```powershell
-$file = 'C:\dev\docs\투자 전략\크립토_투자_마스터_문서.md'
-(Get-Content $file -Raw) -replace [regex]::Escape('찾을 문자열'), '바꿀 문자열' | Set-Content $file -NoNewline
-```
 
 ### AGENTS.md 갱신 규칙
 

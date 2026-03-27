@@ -22,8 +22,8 @@
 4. 트랙 A → 바로 작업지시서를 출력한다.
    트랙 B → 방향 확인서를 먼저 출력한다.
    트랙 C → 글쓴이를 판단하고 바로 작업지시서를 출력한다.
-5. 사용자가 작업지시서를 VS Code 에이전트에 복사해서 실행한다.
-6. VS Code 에이전트는 문서 수정 → git add → git commit → git push를 모두 완료한다.
+5. 사용자가 작업지시서를 Claude Code에 붙여넣어 실행한다.
+6. Claude Code는 문서 수정 → git add → git commit → git push를 모두 완료한다.
 
 ---
 
