@@ -1,3 +1,5 @@
+// ═══ PROJECT: seojai-quotes ═══
+
 /* ═══ Code.gs — 서재 어구록 GAS ═══ */
 
 var VALID_TOKENS = ['claude-feedback'];
