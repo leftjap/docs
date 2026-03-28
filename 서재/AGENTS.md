@@ -81,6 +81,7 @@ common-rules.md 트랙 판단에 추가:
 
 상세 액션별 PowerShell 명령어와 파라미터는 참조 문서에 있다:
 `C:\dev\docs\서재\gas-api-reference.md`
+Code.js에 액션을 추가·변경하면 gas-api-reference.md도 갱신한다. 작업지시서에 갱신 Step을 포함한다.
 
 ### 요약
 

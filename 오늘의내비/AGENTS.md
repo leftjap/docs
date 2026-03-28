@@ -119,7 +119,7 @@ Invoke-WebRequest -UseBasicParsing -Uri "https://script.google.com/macros/s/AKfy
 
 1. `C:\dev\docs\오늘의내비\지오\오늘의 내비(2026~).md` 열어 마지막 항목 서식 확인, 파일 끝에 삽입.
 2. git add → commit → push
-3. 피드백 없음 (별도 요청 시 어구록 DB 검색 활용).
+3. 피드백 없음이 기본. 별도 요청 시 `지오/피드백지침서.md`를 크롤링하고 어구록 DB 검색을 활용한다.
 
 ---
 
