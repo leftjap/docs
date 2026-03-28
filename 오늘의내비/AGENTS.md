@@ -144,6 +144,8 @@ Invoke-WebRequest -UseBasicParsing -Uri "https://script.google.com/macros/s/AKfy
 - Raw base: `https://raw.githubusercontent.com/leftjap/docs/main/`
 - 소연 피드백지침서: `https://raw.githubusercontent.com/leftjap/docs/main/오늘의내비/소연/피드백지침서.md`
 
+크롤링 제외: 현재 없음 — 모든 파일 크롤링 가능.
+
 ## 변경 이력
 
 - 3/28: AGENTS.md 경량화 (35KB→~5KB). 소연 피드백 지침서를 소연/피드백지침서.md로 분리 (B-31). common-rules.md 중복 제거.
