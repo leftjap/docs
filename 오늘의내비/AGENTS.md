@@ -2,7 +2,7 @@
 
 # AGENTS.md — 오늘의내비
 
-> **공통 규칙**: https://raw.githubusercontent.com/leftjap/playbook/main/common-rules.md
+> **공통 규칙**: https://raw.githubusercontent.com/leftjap/opus/main/common-rules.md
 
 ---
 

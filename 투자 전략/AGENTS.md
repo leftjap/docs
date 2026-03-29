@@ -4,7 +4,7 @@
 
 > 이 문서는 크립토 고유 규칙만 담는다.
 > 공통 규칙(트랙 판단, 작업지시서 형식, Claude Code 규칙)은
-> https://raw.githubusercontent.com/leftjap/playbook/main/common-rules.md 를 따른다.
+> https://raw.githubusercontent.com/leftjap/opus/main/common-rules.md 를 따른다.
 
 ---
 
