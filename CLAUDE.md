@@ -1,6 +1,6 @@
 # CLAUDE.md — docs
 
-> 공통 실행 규칙은 playbook CLAUDE.md 참조.
+> 공통 실행 규칙은 opus CLAUDE.md 참조.
 > 이 파일은 docs 레포 고유 주의사항만 담는다.
 
 ## docs 레포 구조
@@ -10,7 +10,6 @@
 - 투자 전략/ — 크립토 투자 마스터 문서. AGENTS.md
 
 ## docs 고유 주의
-- gas/Code.js 수정 후 반드시 clasp push + 웹앱 재배포
 - 서재 archive/ 폴더 파일은 수정하지 않는다
 - 오늘의내비 원문 일기를 임의로 수정하지 않는다
 - 크립토 마스터 문서의 분석 결론을 자의적으로 변경하지 않는다
