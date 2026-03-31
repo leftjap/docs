@@ -1,0 +1,31 @@
+name: Deploy GAS (서재)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '서재/gas/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install clasp
+        run: npm install -g @google/clasp
+
+      - name: Write .clasprc.json
+        run: echo '${{ secrets.CLASPRC_JSON }}' > ~/.clasprc.json
+
+      - name: Push to Apps Script
+        run: clasp push --force
+        working-directory: 서재/gas
+
+      - name: Deploy
+        run: clasp deploy -i "AKfycbyldcNzji4n3p7J83aDR86udPYXKaa8_BAu-E6uNFLTc7VIld_v3UKjGQPtRa0QpaQE" -d "GitHub Actions deploy"
+        working-directory: 서재/gas
