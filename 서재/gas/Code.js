@@ -124,6 +124,48 @@ function getOrCreateFolder(parentFolder, name) {
   return parentFolder.createFolder(name);
 }
 
+function _getSeojaiBackupFolder() {
+  var root = DriveApp.getRootFolder();
+  var backups = getOrCreateFolder(root, 'backups');
+  return getOrCreateFolder(backups, '서재');
+}
+
+function _backupQuotesIfNeeded() {
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var todayStr = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd');
+    if (props.getProperty('quotes_backup_date') === todayStr) return;
+
+    var file = getQuotesFile();
+    var content = file.getBlob().getDataAsString();
+    if (!content || content === '[]') return;
+
+    var backupFolder = _getSeojaiBackupFolder();
+    var backupName = 'quotes-data_backup_' + todayStr + '.json';
+    var existing = backupFolder.getFilesByName(backupName);
+    if (existing.hasNext()) {
+      existing.next().setContent(content);
+    } else {
+      backupFolder.createFile(backupName, content, MimeType.PLAIN_TEXT);
+    }
+
+    var cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 30);
+    var cutoffStr = Utilities.formatDate(cutoff, 'Asia/Seoul', 'yyyy-MM-dd');
+    var allFiles = backupFolder.getFiles();
+    while (allFiles.hasNext()) {
+      var f = allFiles.next();
+      var match = f.getName().match(/^quotes-data_backup_(\d{4}-\d{2}-\d{2})\.json$/);
+      if (match && match[1] < cutoffStr) f.setTrashed(true);
+    }
+
+    props.setProperty('quotes_backup_date', todayStr);
+    console.log('서재 백업 완료: ' + backupName);
+  } catch (e) {
+    console.warn('_backupQuotesIfNeeded fail:', e);
+  }
+}
+
 // ═══ 파일 접근 ═══
 // ═══ Drive 경로: apps/서재/ ═══
 function getQuotesFile() {
@@ -142,6 +184,7 @@ function getQuotesData() {
 }
 
 function saveQuotesData(data) {
+  _backupQuotesIfNeeded();
   var file = getQuotesFile();
   file.setContent(JSON.stringify(data, null, 2));
 }
