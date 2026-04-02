@@ -3,7 +3,6 @@
 /* ═══ Code.gs — 서재 어구록 GAS ═══ */
 
 var VALID_TOKENS = ['claude-feedback'];
-var QUOTES_FOLDER = 'seojai-quotes';
 var QUOTES_FILE = 'quotes-data.json';
 
 // ═══ 메인 라우터 ═══
@@ -119,17 +118,17 @@ function _jsonResponse(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-// ═══ 파일 접근 ═══
-function getQuotesFile() {
-  var root = DriveApp.getRootFolder();
-  var folders = root.getFoldersByName(QUOTES_FOLDER);
-  var folder;
-  if (folders.hasNext()) {
-    folder = folders.next();
-  } else {
-    folder = root.createFolder(QUOTES_FOLDER);
-  }
+function getOrCreateFolder(parentFolder, name) {
+  var folders = parentFolder.getFoldersByName(name);
+  if (folders.hasNext()) return folders.next();
+  return parentFolder.createFolder(name);
+}
 
+// ═══ 파일 접근 ═══
+// ═══ Drive 경로: apps/서재/ ═══
+function getQuotesFile() {
+  var apps = getOrCreateFolder(DriveApp.getRootFolder(), 'apps');
+  var folder = getOrCreateFolder(apps, '서재');
   var files = folder.getFilesByName(QUOTES_FILE);
   if (files.hasNext()) return files.next();
   return folder.createFile(QUOTES_FILE, '[]', MimeType.PLAIN_TEXT);
