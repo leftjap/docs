@@ -2,6 +2,11 @@
 
 형식: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
+## 2026-04-03
+
+### Added
+- devlog 시스템 도입 — 세션별 핸드오프 템플릿(devlog-template.md)과 기록 파일(devlog.md) 생성. opus.md에 핸드오프 프로토콜 추가. (devlog-template.md, devlog.md, opus.md)
+
 ## 2026-04-02
 
 ### Removed
